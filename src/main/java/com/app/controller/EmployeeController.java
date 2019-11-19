@@ -5,18 +5,18 @@ import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.ui.Model;
-import org.springframework.validation.Errors;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.app.dto.EmployeeDto;
+import com.app.repo.EmployeeRepository;
 import com.app.service.impl.EmployeeServiceImpl;
 import com.app.validator.EmployeeValidator;
 
@@ -36,173 +36,147 @@ public class EmployeeController {
 	@Autowired
 	private EmployeeValidator validator;
 
+	@Autowired
+	private EmployeeRepository repo;
+
 
 	// check username
 
 	@GetMapping("/check/{empUserName}")
-	public @ResponseBody ResponseEntity<Mono<Map<String, String>>> checkUserName(@PathVariable Mono<String> empUserName)
+	public  ResponseEntity<Flux<Object>> checkUserName(@PathVariable String empUserName)
 	{
-		String msg="";
-
-		EmployeeDto emp = service.getEmployeeByUserName(empUserName).blockFirst();
-
 		Map<String,String> map = new HashMap<>();
-		
-		if(emp.getEmpId() != null)
-		{
-			msg="Username already exits !!";
-			map.put("msg", msg);
-			
-			return ResponseEntity.ok(Mono.just(map));
-		}
-		else {
-			map.put("msg", msg);
-			return ResponseEntity.ok(Mono.just(map));
-		}
-		
-}
+
+		Flux<Object> flux = service.getEmployeeByUserName(empUserName).map(e -> {
+			if(e.getId() != null )
+			{
+				map.put("msg", "Employee Already Exists !!");
+			}
+			else {
+				map.put("msg", "");
+			}
+			return ResponseEntity.ok(map);
+		});
+
+		return ResponseEntity.ok(flux);
+	}
 
 
-@PostMapping("save")
-public Mono<ResponseEntity<String>> saveEmployee(@ModelAttribute Mono<EmployeeDto> employee,Errors errors,Model map)
-{
-	log.info("Entering into save method");
-
-	validator.validate(employee, errors);
-
-	if(!errors.hasErrors())
+	@PostMapping("/save")
+	public ResponseEntity<Mono<Object>> saveEmployee(@RequestBody EmployeeDto employee)
 	{
-		Mono<EmployeeDto> mono = service.saveEmployee(employee);
+		log.info("Entering into save method");
+
+
+		service.saveEmployee(employee);
+
 		log.info("Employee Saved Sucessfully !!");
 
-		return Mono.just(new ResponseEntity<>("Employee Saved Sucessfully !!",HttpStatus.OK));
+		Map<String,String> map = new HashMap<>();
+		map.put("msg","Employee Saved Sucessfully !!");
+
+		return ResponseEntity.ok(Mono.just(map));
+		//	}
+		//	else
+		//	{
+		//		log.info("Employee Details Are Not Correct ");
+		//
+		//		return Mono.just(new ResponseEntity<>(HttpStatus.NOT_FOUND));
+		//	}
+
 	}
-	else
-	{
-		log.info("Employee Details Are Not Correct ");
 
-		return Mono.just(new ResponseEntity<>(HttpStatus.NOT_FOUND));
+
+
+	// show all employees
+
+	//@GetMapping(value="/all",produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	@GetMapping(value="/all",produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<Flux<EmployeeDto>> getAllEmployees()
+	{
+		log.info("getting all employees");
+
+		Flux<EmployeeDto> flux = service.getAllEmployees().switchIfEmpty(Flux.just());
+
+		return new ResponseEntity<>(flux,HttpStatus.OK);	
 	}
 
-}
 
 
+	// view one employee
 
-// show all employees
-
-//@GetMapping("/all")
-//public Flux<ResponseEntity<Flux<EmployeeDto>>> getAllEmployees()
-//{
-//	log.info("getting all employees");
-//	
-//	Flux<EmployeeDto> flux = service.getAllEmployees();
-//	
-//	return Flux.just(new ResponseEntity<>(flux,HttpStatus.OK));	
-//}
-
-@GetMapping("/all")
-public ResponseEntity<Flux<EmployeeDto>> getAllEmployees()
-{
-	log.info("getting all employees");
-	
-	Flux<EmployeeDto> flux = service.getAllEmployees();
-	
-	return new ResponseEntity<>(flux,HttpStatus.OK);	
-}
-
-/**
-// view one employee
-
-@GetMapping("/viewOne/{empId}")
-public String viewOneEmployee(@PathVariable Integer empId,Model map,RedirectAttributes rmap)
-{
-	if(service.checkEmployee(empId))
+	@GetMapping("/viewOne/{empId}")
+	public ResponseEntity<Mono<Object>> viewOneEmployee(@PathVariable String empId)
 	{
-		map.addAttribute("emp",service.getOneEmployee(empId));
-
+		//	if(service.checkEmployee(empId))
+		//	{
 		log.info("Returning Employee Details !");
 
-		return "ViewEmployee";
-	}
-	else
-	{
-		log.error("No Employee Found With Given Id");
-		throw new EmployeeNotFoundException("Employee Not Found");
-	}
-}
+		Mono<Object> mono = service.getOneEmployee(empId).map(e -> {
+			return ResponseEntity.ok(e);
+		});
 
-
-// get employee update page
-
-@GetMapping("/update/{empId}")
-public String getUpdate(@PathVariable Integer empId,Model map)
-{
-	if(service.checkEmployee(empId))
-	{
-		map.addAttribute("employee",service.getOneEmployee(empId));
-
-		log.info("Employee Found , Returing Employee Details on Update Page !");
-
-		return "EmployeeUpdate";
-	}
-	else
-	{
-		throw new EmployeeNotFoundException("Employee Not Found");
-	}
-}
-
-
-// update employee
-
-@PostMapping("/updateEmployee")
-public String updateEmployee(@ModelAttribute Employee employee,Errors errors,Model map,RedirectAttributes rmap)
-{
-	log.info("Entering into update method");
-
-	validator.validate(employee, errors);
-
-	if(!errors.hasErrors())
-	{
-		Integer empId = service.updateEmployee(employee);
-		rmap.addFlashAttribute("smsg","Employee Updated Successfully with Id :"+empId);
-
-		log.info("Employee Updated Sucessfully !!");
-
-		return "redirect:all";
-	}
-	else
-	{
-		log.info("Employee Details Are Not Correct ");
-
-		map.addAttribute("employee",employee);
-		map.addAttribute("emsg","Please Enter Valid Details");
-
-		return "EmployeeUpdate";
+		return ResponseEntity.ok(mono);
+		//		return ResponseEntity.ok(mono);
+		//	}
+		//	else
+		//	{
+		//		log.error("No Employee Found With Given Id");
+		//		throw new EmployeeNotFoundException("Employee Not Found");
+		//	}
 	}
 
-}
+	// update employee
 
-
-// delete Employee 
-
-@GetMapping("/delete/{empId}")
-public String deleteEmployee(@PathVariable Integer empId, RedirectAttributes map)
-{
-	if(service.checkEmployee(empId))
+	@PostMapping("/updateEmployee")
+	public ResponseEntity<Mono<Object>> updateEmployee(@RequestBody EmployeeDto employee)
 	{
-		service.deleteEmployee(empId);
+		log.info("Entering into update method");
 
-		map.addFlashAttribute("msg","Employee Deleted SuccessFully with Given Id :"+empId);
+		//	validator.validate(employee, errors);
+		//
+		//	if(!errors.hasErrors())
+		//	{
+		Map<String,String> map = new HashMap<>();
+
+		Mono<EmployeeDto> m = service.updateEmployee(employee);
+		Mono<Object> mono = m.map(e-> {
+			map.put("msg","Employee updated Sucessfully with id = "+ e.getId() );
+			return ResponseEntity.ok(map);
+		} );
+
+		return ResponseEntity.ok(mono);
+
+		//}
+		//	else
+		//	{
+		//		log.info("Employee Details Are Not Correct ");
+		//
+		//		map.addAttribute("employee",employee);
+		//		map.addAttribute("emsg","Please Enter Valid Details");
+		//
+		//		return "EmployeeUpdate";
+		//	}
+
+	}
+
+
+	// delete Employee 
+
+	@DeleteMapping("/delete/{empId}")
+	public ResponseEntity<Mono<Object>> deleteEmployee(@PathVariable String empId)
+	{
+	
+		Map<String,String> map = new HashMap<>();
+		Mono<Object> mono = service.deleteEmployee(empId).map(e -> {
+			map.put("msg","Employee Deleted SuccessFully with Given Id :"+empId);
+			return ResponseEntity.ok(map);
+		});
 
 		log.info("Employee Deleted Successfully  !!");
 
-		return "redirect:/all";
-	}
-	else
-	{
-		throw new EmployeeNotFoundException("Employee Not Found");
-	}
-}
+		return ResponseEntity.ok(mono);
 
-**/
+	}
+
 }

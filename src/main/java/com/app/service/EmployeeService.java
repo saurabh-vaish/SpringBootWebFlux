@@ -7,7 +7,7 @@ import reactor.core.publisher.Mono;
 
 public interface EmployeeService {
 
-	public Mono<EmployeeDto> saveEmployee(Mono<EmployeeDto> emp);
+	public Mono<EmployeeDto> saveEmployee(EmployeeDto emp);
 	
 	public Mono<EmployeeDto> updateEmployee(EmployeeDto emp);
 	
@@ -19,7 +19,7 @@ public interface EmployeeService {
 	
 	public Mono<Boolean> checkEmployee(String empId);
 	
-	public Flux<EmployeeDto> getEmployeeByUserName(Mono<String> username);
+	public Flux<EmployeeDto> getEmployeeByUserName(String username);
 	 
 	
 }
